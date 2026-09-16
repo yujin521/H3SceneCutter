@@ -1,0 +1,19 @@
+# 运行时数据（上传的视频/切帧结果/任务状态）
+data/
+
+# 语音识别模型（461MB，不随仓库分发）
+models/
+
+# PyInstaller 打包产物
+build/
+dist/
+*.pyc
+__pycache__/
+
+# 测试素材
+test_video*.mp4
+test_voice.wav
+*.wav
+
+# 临时脚本
+final_check*.py

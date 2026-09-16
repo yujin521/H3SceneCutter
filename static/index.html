@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 H3 镜头切帧工具</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎬 H3 镜头切帧工具</div>
+  <div class="top-actions" id="topActions" style="display:none">
+    <button class="btn ghost" id="btnAsr" title="识别视频音轨中的语音，自动填入对应镜头的台词">🎙 提取台词</button>
+    <button class="btn ghost" id="btnExportTxt">⬇ 导出提示词 txt</button>
+    <button class="btn ghost" id="btnExportJson">⬇ 导出 json</button>
+    <button class="btn primary" id="btnNewTask">＋ 新任务</button>
+  </div>
+</header>
+
+<main>
+  <!-- ========== 上传区 ========== -->
+  <section id="uploadPanel" class="panel upload-panel">
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">🎞️</div>
+      <p class="upload-title">拖拽视频到这里，或点击选择</p>
+      <p class="upload-hint">支持 mp4 / mov / avi / mkv / flv / wmv / webm，最大 2GB</p>
+      <input type="file" id="videoInput" accept="video/*,.mp4,.mov,.avi,.mkv,.flv,.wmv,.webm" hidden>
+      <button class="btn primary" id="btnChoose">选择视频</button>
+    </div>
+    <div id="fileInfo" class="file-info" style="display:none">
+      <span id="fileName"></span>
+      <span id="fileSize" class="muted"></span>
+    </div>
+    <div class="params-row">
+      <label>切帧灵敏度
+        <input type="number" id="threshold" value="27" min="1" max="100" step="1" title="0~100，越大越不易误切；动漫/短剧推荐 25~35">
+      </label>
+      <label>最小镜头时长(秒)
+        <input type="number" id="minSceneLen" value="0.5" min="0.1" max="10" step="0.1" title="过滤短于该时长的抖动误检">
+      </label>
+      <button class="btn primary" id="btnStart" disabled>开始切帧</button>
+    </div>
+    <div id="progressWrap" style="display:none">
+      <div class="spinner"></div>
+      <p id="progressText">正在分析镜头切变...</p>
+    </div>
+
+    <div class="history-block">
+      <h3 class="history-title">📚 历史切帧记录 <span class="muted" id="historyCount"></span></h3>
+      <div id="historyList" class="history-list">
+        <p class="history-empty muted">暂无记录，上传视频开始第一次切帧</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 结果区 ========== -->
+  <section id="resultPanel" class="panel result-panel" style="display:none">
+    <div class="result-head">
+      <button class="btn ghost" id="btnBack">← 返回列表</button>
+      <h2 id="resultTitle"></h2>
+      <span class="muted" id="resultMeta"></span>
+    </div>
+    <div class="result-body">
+      <!-- 左：视频 + 缩略图 -->
+      <div class="left-col">
+        <div class="video-box">
+          <video id="player" controls preload="metadata"></video>
+        </div>
+        <div class="scene-grid" id="sceneGrid"></div>
+      </div>
+      <!-- 右：编辑面板 -->
+      <div class="right-col">
+        <div class="big-frame" id="bigFrameBox">
+          <img id="bigFrame" alt="镜头首帧">
+          <div class="big-frame-time" id="bigFrameTime"></div>
+          <div class="big-frame-zoom">🔍 点击放大</div>
+        </div>
+        <div class="edit-panel" id="editPanel">
+          <div class="edit-row">
+            <label>镜头标题
+              <input type="text" id="fTitle" placeholder="如：女方起疑">
+            </label>
+            <label>景别
+              <input type="text" id="fShotSize" placeholder="如：双人中景 / 特写 / 全景">
+            </label>
+          </div>
+          <label>画面描述（只写有什么、在哪里，不写机位）
+            <textarea id="fVisual" rows="6" placeholder="画面里的人物/物体/位置/服饰/动作/环境/光影..."></textarea>
+          </label>
+          <div class="edit-row">
+            <label>说话角色
+              <input type="text" id="fSpeaker" placeholder="如：女生">
+            </label>
+            <label>语气
+              <input type="text" id="fTone" placeholder="如：带着疑问 / 撒娇">
+            </label>
+          </div>
+          <label>台词
+            <textarea id="fDialogue" rows="2" placeholder="台词内容，如：你们男的是不是都喜欢年轻的？"></textarea>
+          </label>
+          <div class="edit-row">
+            <label>Audio 编号
+              <input type="number" id="fAudio" min="1" step="1">
+            </label>
+          </div>
+          <div class="edit-actions">
+            <button class="btn ghost" id="btnJump">⏱ 视频定位到该镜头</button>
+            <button class="btn ghost" id="btnHide">🙈 忽略该镜头</button>
+            <button class="btn primary" id="btnSave">💾 保存</button>
+          </div>
+          <p class="save-tip" id="saveTip"></p>
+        </div>
+        <div class="nav-actions">
+          <button class="btn ghost" id="btnPrev">← 上一镜头</button>
+          <button class="btn ghost" id="btnNext">下一镜头 →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">镜头切帧引擎：PySceneDetect + OpenCV · 提示词格式适配 H3 海螺</footer>
+
+<!-- ========== 全屏放大查看器 ========== -->
+<div id="viewer" class="viewer hidden">
+  <div class="viewer-toolbar">
+    <span id="viewerTitle" class="viewer-title"></span>
+    <div class="viewer-tools">
+      <button class="btn ghost" id="zoomOut" title="缩小">－</button>
+      <span id="zoomLevel" class="zoom-level">100%</span>
+      <button class="btn ghost" id="zoomIn" title="放大">＋</button>
+      <button class="btn ghost" id="zoomReset" title="复位">1:1</button>
+      <button class="btn primary" id="viewerClose" title="关闭">✕ 关闭</button>
+    </div>
+  </div>
+  <div class="viewer-body" id="viewerBody">
+    <img id="viewerImg" alt="首帧放大预览">
+    <p class="viewer-hint">滚轮缩放 · 按住拖动 · Esc 关闭</p>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
